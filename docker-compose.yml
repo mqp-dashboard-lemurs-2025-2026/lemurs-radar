@@ -1,0 +1,44 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    command: sh -c "until pg_isready -h db -p 5432; do sleep 1; done; uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      DATABASE_URL: postgresql://lemurs:lemurs@db/lemurs
+      TIMEZONE: America/New_York
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - /app/node_modules
+    command: npm run dev -- -H 0.0.0.0 -p 3000
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /app
+          ignore:
+            - node_modules/
+            - .next/
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --url http://frontend:3000
+    depends_on:
+      - frontend
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: lemurs
+      POSTGRES_PASSWORD: lemurs
+      POSTGRES_DB: lemurs
+    volumes:
+      - ./backend/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+volumes:
+  postgres_data:
